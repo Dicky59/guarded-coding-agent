@@ -1,0 +1,8 @@
+[
+  {
+    "id": "sum-bug",
+    "fixture": "sum-bug",
+    "task": "The tests are failing. Find and fix the bug so that `npm test` passes. Do not modify the tests.",
+    "verify": "npm test"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "name": "guarded-coding-agent",
+  "version": "0.1.0",
+  "description": "A minimal Claude-Code-style coding agent: hand-built agent loop, tools, loop safety.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "agent": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx --env-file-if-exists=.env src/cli.ts",
+    "test": "node --import tsx --test \"test/*.test.ts\"",
+    "eval": "tsx --env-file-if-exists=.env evals/run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
