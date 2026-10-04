@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ModelClient, ModelRequest, ModelResponse, TextBlock, ToolUseBlock } from "../types.js";
 
+export const DEFAULT_MODEL = process.env.AGENT_MODEL ?? "claude-sonnet-5-5";
+
 export class AnthropicModel implements ModelClient {
   private client: Anthropic;
 
   constructor(
-    private readonly model: string = process.env.AGENT_MODEL ?? "claude-sonnet-5-5",
+    private readonly model: string = DEFAULT_MODEL,
     apiKey: string | undefined = process.env.ANTHROPIC_API_KEY,
     private readonly maxTokens = 4096,
   ) {
