@@ -18,6 +18,7 @@ function killTree(pid: number): void {
 function childEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  delete env.ANTHROPIC_API_KEY;
   return env;
 }
 

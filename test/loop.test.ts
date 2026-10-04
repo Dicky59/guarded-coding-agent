@@ -111,3 +111,15 @@ test("edit_file requires a unique match", async () => {
   assert.match(block.content, /matches 2 places/);
   assert.equal(fs.readFileSync(path.join(ws, "dup.txt"), "utf8"), "a\na\n"); // unchanged
 });
+test("does not leak ANTHROPIC_API_KEY to agent commands", async () => {
+  process.env.ANTHROPIC_API_KEY = "sk-ant-test-secret";
+  const ws = tmpWorkspace();
+  const model = new ScriptedModel([
+    () => toolCall("run_command", { command: 'node -e "console.log(process.env.ANTHROPIC_API_KEY ?? \'unset\')"' }),
+    () => done("ok"),
+  ]);
+  await runAgent({ task: "x", workspace: ws, model });
+  const block = (model.calls[1]!.messages.at(-1)!.content as any[])[0];
+  assert.match(block.content, /unset/);
+  assert.doesNotMatch(block.content, /sk-ant-test-secret/);
+});
