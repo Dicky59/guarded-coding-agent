@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isSecretPath } from "../guardrails/secrets.js";
 import { resolveInWorkspace, truncate } from "../paths.js";
 import type { Tool } from "../types.js";
 
@@ -8,6 +9,7 @@ const MAX_MATCHES = 200;
 
 async function* walk(dir: string): AsyncGenerator<string> {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    if (isSecretPath(entry.name)) continue; // never surface .env / keys through search
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name)) yield* walk(path.join(dir, entry.name));
     } else if (entry.isFile()) {

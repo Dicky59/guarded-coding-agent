@@ -78,6 +78,28 @@ export type AgentEvent =
   | { type: "assistant_text"; text: string }
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; content: string; isError: boolean }
+  | { type: "guardrail"; id: string; name: string; outcome: "blocked" | "approved" | "denied"; risk: Risk; reason: string }
+  | { type: "checkpoint"; id: string; sha: string; label: string }
   | { type: "stopped"; status: RunStatus; reason: string };
 
 export type RunStatus = "completed" | "max_iterations" | "stuck" | "error";
+
+// ---- Guardrails / checkpoints (M2) ----
+
+export type Risk = "read" | "reversible" | "irreversible";
+
+export interface ApprovalRequest {
+  id: string;
+  tool: string;
+  input: Record<string, unknown>;
+  risk: Risk;
+  reason: string;
+}
+
+/** Asked a human (or a policy) whether a risky action may run once. */
+export type Approver = (req: ApprovalRequest) => Promise<boolean>;
+
+/** Snapshots the workspace; returns an id that can be restored later. */
+export interface Checkpointer {
+  snapshot(label: string): Promise<string | null>;
+}
