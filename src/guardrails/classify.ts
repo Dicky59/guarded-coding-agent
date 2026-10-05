@@ -82,10 +82,11 @@ const ENV_ASSIGN = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/;
  * `grep` used as an output filter: safe flags, exactly ONE pattern, no file arguments.
  * The pattern must be a plain word or a double-quoted string with no $ ` \\ % or '. Those are inert in both
  * POSIX shells and cmd.exe (which does not treat single quotes as quotes, so those stay unsupported).
- * `-r`, `-R`, `-f`, `-e` are deliberately not in the flag set: they read files.
+ * Numeric context flags (-A/-B/-C/-m N) are fine. `-r`, `-R`, `-f`, `-e` are deliberately not allowed: they read files.
  * The pattern is folded to a placeholder so a `|` inside quotes is not mistaken for a pipe.
  */
-const GREP_FILTER = /\bgrep((?:\s+-[EFivcnwxoqsh]+)*)\s+(?:"[^"$`\\%']*"|[\w.-]+)(?=\s*(?:$|[|;&]))/g;
+const GREP_FLAG = String.raw`(?:-[EFivcnwxoqsh]+|-[ABCm]\s?\d+)`;
+const GREP_FILTER = new RegExp(String.raw`\bgrep((?:\s+${GREP_FLAG})*)\s+(?:"[^"$\x60\\%']*"|[\w.-]+)(?=\s*(?:$|[|;&]))`, "g");
 
 function prepare(command: string): string {
   return command.replace(/2>&1/g, "").replace(GREP_FILTER, (_m, flags: string) => `grep${flags} __PAT__`);
@@ -111,7 +112,7 @@ export function isSimple(command: string): boolean {
  */
 export function isStdinFilter(segment: string): boolean {
   const s = segment.trim();
-  return /^(?:head|tail|wc)(?:\s+(?:-[A-Za-z0-9]+|\d+))*$/.test(s) || /^grep(?:\s+-[EFivcnwxoqsh]+)*\s+__PAT__$/.test(s);
+  return /^(?:head|tail|wc)(?:\s+(?:-[A-Za-z0-9]+|\d+))*$/.test(s) || new RegExp(String.raw`^grep(?:\s+${GREP_FLAG})*\s+__PAT__$`).test(s);
 }
 
 export function matchesAny(segment: string, prefixes: string[]): boolean {

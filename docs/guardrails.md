@@ -23,7 +23,7 @@ Refusals are returned to the model as tool errors (the loop recovers and can pic
 | secret | `.env*` (not `.env.example`), `~/.ssh`, `~/.aws`, private keys, `.npmrc` | **deny** (never offered for approval) |
 
 Default allow-list: `npm test`, `npm run test|build|lint|typecheck`, `npx tsc`, `node --test`.
-Output filters are allowed when they can only read piped output: `head`, `tail`, `wc` with only flags and numbers, and `grep` with safe flags and exactly one pattern (a plain word or a double-quoted string). So `npm test 2>&1 | grep -E "(pass|fail)"` runs freely, while `head file.txt`, `grep foo file.txt`, `grep -r` and `grep -f` still ask. Single-quoted patterns are not accepted because `cmd.exe` doesn't treat single quotes as quoting.
+Output filters are allowed when they can only read piped output: `head`, `tail`, `wc` with only flags and numbers, and `grep` with safe flags (including numeric context flags like `-A 30`) and exactly one pattern (a plain word or a double-quoted string). So `npm test 2>&1 | grep -E "(pass|fail)"` runs freely, while `head file.txt`, `grep foo file.txt`, `grep -r` and `grep -f` still ask. Single-quoted patterns are not accepted because `cmd.exe` doesn't treat single quotes as quoting.
 Commands with redirects, backgrounding or `$(…)` substitution are never auto-allowed.
 Writes inside `.git/` are denied (hook injection). `search` skips secret files entirely.
 
