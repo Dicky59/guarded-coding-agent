@@ -5,12 +5,18 @@
 //   node evals/compare.mjs evals/results/m2.json,evals/results/m2-shop.json evals/results/m3a.json
 //
 // Either side may be several comma-separated files; their tasks are merged by id.
-// "better/worse" is only claimed when the token ranges (min-max over the repeats) do not overlap.
+// "better/worse" is only claimed when BOTH hold: the mean moved by at least --min percent (default 10), and the
+// token ranges (min-max over the repeats) do not overlap. Very repeatable tasks have tiny ranges, so without the
+// threshold a 4% shift would look "significant".
+//   node evals/compare.mjs <base> <new> --min 15
 import fs from "node:fs";
 
-const [baseArg, newArg] = process.argv.slice(2);
-if (!baseArg || !newArg) {
-  console.error("usage: node evals/compare.mjs <base.json[,more.json]> <new.json[,more.json]>");
+const argv = process.argv.slice(2);
+const minIdx = argv.indexOf("--min");
+const MIN_PCT = minIdx >= 0 ? Number(argv.splice(minIdx, 2)[1]) : 10;
+const [baseArg, newArg] = argv;
+if (!baseArg || !newArg || !Number.isFinite(MIN_PCT)) {
+  console.error("usage: node evals/compare.mjs <base.json[,more.json]> <new.json[,more.json]> [--min 10]");
   process.exit(2);
 }
 
@@ -37,15 +43,18 @@ let worse = 0;
 for (const [id, b] of base.tasks) {
   const t = next.tasks.get(id);
   if (!t) continue;
+  const delta = ((t.tokens.mean - b.tokens.mean) / b.tokens.mean) * 100;
+  const shown = pct(b.tokens.mean, t.tokens.mean);
   let verdict;
   if (t.passes / t.runs < b.passes / b.runs) {
     verdict = "WORSE: pass rate dropped";
     worse++;
-  } else if (t.tokens.max < b.tokens.min) verdict = `better (${pct(b.tokens.mean, t.tokens.mean)}, ranges do not overlap)`;
+  } else if (Math.abs(delta) < MIN_PCT) verdict = `similar (${shown}, below the ${MIN_PCT}% threshold)`;
+  else if (t.tokens.max < b.tokens.min) verdict = `better (${shown}, ranges do not overlap)`;
   else if (t.tokens.min > b.tokens.max) {
-    verdict = `WORSE (${pct(b.tokens.mean, t.tokens.mean)}, ranges do not overlap)`;
+    verdict = `WORSE (${shown}, ranges do not overlap)`;
     worse++;
-  } else verdict = `similar (${pct(b.tokens.mean, t.tokens.mean)}, ranges overlap)`;
+  } else verdict = `similar (${shown}, ranges overlap)`;
 
   console.log(
     `${id.padEnd(17)} ${`${b.passes}/${b.runs} -> ${t.passes}/${t.runs}`.padEnd(13)} ${`${b.steps.mean} -> ${t.steps.mean}`.padEnd(15)} ` +
