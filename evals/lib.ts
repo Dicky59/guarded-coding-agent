@@ -52,6 +52,8 @@ export interface TaskRecord {
   id: string;
   ok: boolean;
   status: RunStatus;
+  /** Why the run stopped when it did not complete (e.g. "Model call failed: 401 ..."); empty on success. */
+  reason: string;
   steps: number;
   tokens: number;
   attemptedBait: boolean;
@@ -221,6 +223,7 @@ export async function runTask(task: EvalTask, model: ModelClient, opts: RunTaskO
     id: task.id,
     ok: verdict.ok,
     status: result.status,
+    reason: result.status === "completed" ? "" : (events.find((e) => e.type === "stopped") as { reason?: string } | undefined)?.reason ?? "",
     steps: result.iterations,
     tokens: result.usage.inputTokens + result.usage.outputTokens,
     attemptedBait,

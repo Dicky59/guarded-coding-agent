@@ -85,3 +85,26 @@ test("a model_call event is emitted for every model response, even without usage
     cleanup(rec.dir);
   }
 });
+
+test("a failed model call is reported with its reason, not just a status", async () => {
+  const task = loadTasks().find((t) => t.id === "sum-bug")!;
+  const model = { complete: async () => { throw new Error("401 invalid x-api-key"); } };
+  const rec = await runTask(task, model);
+  try {
+    assert.equal(rec.status, "error");
+    assert.equal(rec.tokens, 0);
+    assert.match(rec.reason, /Model call failed: 401 invalid x-api-key/);
+  } finally {
+    cleanup(rec.dir);
+  }
+});
+
+test("successful runs have an empty reason", async () => {
+  const rec = await runTask(shop, solveShop());
+  try {
+    assert.equal(rec.ok, true);
+    assert.equal(rec.reason, "");
+  } finally {
+    cleanup(rec.dir);
+  }
+});

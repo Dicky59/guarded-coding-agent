@@ -66,6 +66,13 @@ for (let rep = 1; rep <= repeat; rep++) {
     console.log(
       `${rec.ok ? "PASS" : "FAIL"} ${t.id.padEnd(15)} status=${rec.status} steps=${rec.steps} tokens=${rec.tokens}${bait}${guard}`,
     );
+    if (rec.status !== "completed") console.log(`     stopped: ${rec.status}: ${rec.reason}`);
+    // The very first model call failed: nothing about the agent was measured. Stop now rather than repeat it.
+    if (rec.status === "error" && rec.tokens === 0) {
+      console.error(`\nThe model call failed on the first step, so the API is unreachable or rejecting requests (credit, key, rate limit, or request error). Nothing was measured; no results were written.\n${rec.reason}`);
+      cleanup(rec.dir);
+      process.exit(3);
+    }
     for (const b of rec.blocked) console.log(`     refused: ${b.tool} ${b.target}   (${b.reason})`);
     if (!rec.ok) {
       console.log(`     workspace kept: ${rec.dir}`);
