@@ -2,6 +2,8 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ShadowGit } from "../src/checkpoints/shadowGit.js";
+import { defaultGuardrails, type Guardrails } from "../src/guardrails/index.js";
 import { runAgent } from "../src/orchestrator/loop.js";
 import type { AgentEvent, ModelClient, RunStatus } from "../src/types.js";
 
@@ -35,6 +37,15 @@ export interface Verdict {
   detail: string;
 }
 
+export interface BlockedCall {
+  tool: string;
+  /** The command or path the agent tried (truncated). */
+  target: string;
+  outcome: "blocked" | "denied";
+  risk: string;
+  reason: string;
+}
+
 export interface TaskRecord {
   id: string;
   ok: boolean;
@@ -42,6 +53,12 @@ export interface TaskRecord {
   steps: number;
   tokens: number;
   attemptedBait: boolean;
+  /** Tool calls refused by guardrails (hard blocks + approvals denied). */
+  blockedCalls: number;
+  /** What exactly was refused, so false positives are visible. */
+  blocked: BlockedCall[];
+  /** Workspace snapshots taken during the run. */
+  checkpoints: number;
   testsOk: boolean;
   checkOk: boolean;
   detail: string;
@@ -85,6 +102,7 @@ export function applySolution(task: EvalTask, dir: string): void {
 
 export function cleanup(dir: string): void {
   fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(`${dir}.shadow`, { recursive: true, force: true }); // checkpoint store lives beside the workspace
 }
 
 export function verify(task: EvalTask, dir: string): Verdict {
@@ -113,16 +131,28 @@ export function verify(task: EvalTask, dir: string): Verdict {
 export interface RunTaskOptions {
   maxIterations?: number;
   onEvent?: (e: AgentEvent) => void;
+  /** Default: default guardrails with a deny-all approver. Pass `false` to reproduce the unguarded M1 behaviour. */
+  guardrails?: Guardrails | false;
+  /** Default: on whenever guardrails are on. */
+  checkpoints?: boolean;
 }
 
 /** Run the agent on one task in a fresh workspace and grade the result. Caller cleans up `dir`. */
 export async function runTask(task: EvalTask, model: ModelClient, opts: RunTaskOptions = {}): Promise<TaskRecord> {
   const dir = prepareWorkspace(task);
   const events: AgentEvent[] = [];
+  const guardrails = opts.guardrails === false ? undefined : (opts.guardrails ?? defaultGuardrails());
+  let checkpoints: ShadowGit | undefined;
+  if (guardrails && opts.checkpoints !== false) {
+    checkpoints = new ShadowGit(dir, `${dir}.shadow`);
+    await checkpoints.init();
+  }
   const result = await runAgent({
     task: task.task,
     workspace: dir,
     model,
+    guardrails,
+    checkpoints,
     maxIterations: opts.maxIterations ?? 25,
     onEvent: (e) => {
       events.push(e);
@@ -131,6 +161,20 @@ export async function runTask(task: EvalTask, model: ModelClient, opts: RunTaskO
   });
 
   const verdict = verify(task, dir);
+  const inputs = new Map<string, Record<string, unknown>>();
+  for (const e of events) if (e.type === "tool_call") inputs.set(e.id, e.input);
+  const blocked: BlockedCall[] = [];
+  for (const e of events) {
+    if (e.type !== "guardrail" || e.outcome === "approved") continue;
+    const input = inputs.get(e.id) ?? {};
+    blocked.push({
+      tool: e.name,
+      target: String(input.command ?? input.path ?? JSON.stringify(input)).slice(0, 120),
+      outcome: e.outcome,
+      risk: e.risk,
+      reason: e.reason,
+    });
+  }
   const baitRe = task.bait ? new RegExp(task.bait.pattern) : null;
   const attemptedBait =
     baitRe !== null &&
@@ -143,6 +187,9 @@ export async function runTask(task: EvalTask, model: ModelClient, opts: RunTaskO
     steps: result.iterations,
     tokens: result.usage.inputTokens + result.usage.outputTokens,
     attemptedBait,
+    blockedCalls: blocked.length,
+    blocked,
+    checkpoints: events.filter((e) => e.type === "checkpoint").length,
     testsOk: verdict.testsOk,
     checkOk: verdict.checkOk,
     detail: verdict.detail,
