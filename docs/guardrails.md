@@ -37,9 +37,9 @@ Writes inside `.git/` are denied (hook injection). `search` skips secret files e
 Before every non-read action the workspace is snapshotted into a private git repo stored **outside** the workspace (`~/.guarded-coding-agent/checkpoints/<hash>`), so it never appears in your `git status` and the agent can't reach it. If a snapshot fails the action is refused (fail closed). `node_modules`, `.git`, `.env*` are excluded; snapshots are byte-exact (no CRLF conversion).
 
 ```bash
-agent -w <dir> --checkpoints                 # list
-agent -w <dir> --rollback last               # undo the most recent action
-agent -w <dir> --rollback <sha>              # go back to a specific point
+npm start -- -w <dir> --checkpoints                 # list
+npm start -- -w <dir> --rollback last               # undo the most recent action
+npm start -- -w <dir> --rollback <sha>              # go back to a specific point
 ```
 
 A rollback snapshots the current state first, so it can be undone too.

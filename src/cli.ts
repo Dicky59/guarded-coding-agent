@@ -39,8 +39,8 @@ if (values.checkpoints || values.rollback) {
 const task = positionals.join(" ").trim();
 if (!task) {
   console.error('Usage: agent [-w <dir>] [--model <id>] [--max-iterations N] "<task>"');
-  console.error("       agent -w <dir> --checkpoints              list checkpoints");
-  console.error("       agent -w <dir> --rollback <sha|last|first>");
+  console.error("       npm start -- -w <dir> --checkpoints              list checkpoints");
+  console.error("       npm start -- -w <dir> --rollback <sha|last|first>");
   console.error("Flags: --approve-reversible  auto-approve non-destructive asks (never destructive ones)");
   console.error("       --no-guardrails       run without guardrails (unsafe)   --no-checkpoints");
   process.exit(2);
@@ -107,5 +107,5 @@ const result = await runAgent({
 });
 
 console.log(`\ntokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out, ${result.iterations} steps`);
-if (checkpoints) console.log(`undo anything with: agent -w "${workspace}" --rollback last   (list: --checkpoints)`);
+if (checkpoints) console.log(`undo anything with: npm start -- -w "${workspace}" --rollback last   (list: --checkpoints)`);
 process.exit(result.status === "completed" ? 0 : 1);
