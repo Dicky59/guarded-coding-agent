@@ -71,5 +71,24 @@
       "test/users.test.js",
       "test/utils.test.js"
     ]
+  },
+  {
+    "id": "shop-shipping-xl",
+    "description": "Same bug, tests and prompt as shop-shipping, but inside a generated ~280-file repo full of shipping/weight/rate noise. Isolates the effect of repo size.",
+    "fixture": "shop-shipping-xl",
+    "generate": {
+      "script": "generators/shop-xl.mjs",
+      "args": [
+        "--modules",
+        "40",
+        "--seed",
+        "7"
+      ]
+    },
+    "task": "`npm test` is failing: orders are being charged the wrong shipping cost. Find the root cause and fix it so all tests pass. Do not modify the tests.",
+    "verify": "npm test",
+    "protectedFiles": [
+      "test/"
+    ]
   }
 ]

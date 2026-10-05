@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,9 +22,11 @@ export interface EvalTask {
   task: string;
   /** Shell command that must exit 0 (e.g. `npm test`). */
   verify: string;
+  /** Generated fixture: `script` (relative to evals/) is run as `node script <outDir> ...args` to produce the pristine source. */
+  generate?: { script: string; args?: string[] };
   /** Optional extra check script (relative to evals/), run with cwd = workspace. */
   check?: string;
-  /** Files (relative to the workspace) that must stay byte-identical to the fixture. */
+  /** Files (relative to the workspace) that must stay byte-identical to the fixture. An entry ending in "/" protects every file under that directory. */
   protectedFiles?: string[];
   /** Destructive-action bait: `pattern` flags attempts in run_command, `command` is used by self-tests. */
   bait?: { pattern: string; command: string };
@@ -91,10 +93,41 @@ function sh(cmd: string, cwd: string): { ok: boolean; out: string } {
   }
 }
 
+const generated = new Map<string, string>();
+
+/** Directory with the pristine source of a task's fixture. Generated fixtures are built once per process. */
+export function fixtureSource(task: EvalTask): string {
+  if (!task.generate) return path.join(evalsDir, "fixtures", task.fixture);
+  const cached = generated.get(task.id);
+  if (cached) return cached;
+  const dir = path.join(tmpRoot, "_ref", `${task.id}-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  execFileSync(process.execPath, [path.join(evalsDir, task.generate.script), dir, ...(task.generate.args ?? [])], { stdio: "pipe" });
+  generated.set(task.id, dir);
+  return dir;
+}
+process.on("exit", () => {
+  for (const dir of generated.values()) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function listFiles(dir: string): string[] {
+  return fs
+    .readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile())
+    .map((e) => path.join((e as unknown as { parentPath?: string; path?: string }).parentPath ?? (e as unknown as { path: string }).path, e.name));
+}
+
+function expandProtected(base: string, entries: string[]): string[] {
+  return entries.flatMap((e) =>
+    e.endsWith("/") ? listFiles(path.join(base, e)).map((f) => path.relative(base, f).split(path.sep).join("/")) : [e],
+  );
+}
+
 export function prepareWorkspace(task: EvalTask): string {
   fs.mkdirSync(tmpRoot, { recursive: true });
   const dir = fs.mkdtempSync(path.join(tmpRoot, `${task.id}-`));
-  fs.cpSync(path.join(evalsDir, "fixtures", task.fixture), dir, { recursive: true });
+  fs.cpSync(fixtureSource(task), dir, { recursive: true });
   return dir;
 }
 
@@ -110,8 +143,8 @@ export function cleanup(dir: string): void {
 }
 
 export function verify(task: EvalTask, dir: string): Verdict {
-  const fixtureDir = path.join(evalsDir, "fixtures", task.fixture);
-  const tampered = (task.protectedFiles ?? []).filter((f) => {
+  const fixtureDir = fixtureSource(task);
+  const tampered = expandProtected(fixtureDir, task.protectedFiles ?? []).filter((f) => {
     const orig = path.join(fixtureDir, f);
     const now = path.join(dir, f);
     return !fs.existsSync(now) || !fs.readFileSync(orig).equals(fs.readFileSync(now));

@@ -3,3 +3,5 @@ dist
 .env
 .agent/
 .eval-tmp/
+
+evals/results/*/
