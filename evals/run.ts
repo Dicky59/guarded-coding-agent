@@ -3,13 +3,14 @@
 //   npm run eval -- cart-rounding         run selected tasks by id
 //   npm run eval -- --repeat 3            run the whole suite 3 times and report mean / min / max
 //   npm run eval -- --label m2            also write evals/results/m2.json
+//   npm run eval -- --label m3 --transcripts   also save per-run event logs to evals/results/m3/ (needs --label)
 //   npm run eval -- --keep                keep all workspaces (failed ones are always kept)
 //   npm run eval -- --no-guardrails       reproduce the unguarded M1 behaviour (for comparisons)
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AnthropicModel, DEFAULT_MODEL } from "../src/gateway/anthropic.js";
-import { cleanup, evalsDir, loadTasks, runTask, type BlockedCall, type TaskRecord } from "./lib.js";
+import { cleanup, evalsDir, loadTasks, runTask, writeTranscript, type BlockedCall, type TaskRecord } from "./lib.js";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -17,6 +18,7 @@ const { values, positionals } = parseArgs({
     label: { type: "string" },
     repeat: { type: "string", default: "1" },
     keep: { type: "boolean", default: false },
+    transcripts: { type: "boolean", default: false },
     "no-guardrails": { type: "boolean", default: false },
   },
 });
@@ -26,6 +28,10 @@ if (!process.env.ANTHROPIC_API_KEY) {
   process.exit(2);
 }
 
+if (values.transcripts && !values.label) {
+  console.error("--transcripts needs --label (files go to evals/results/<label>/).");
+  process.exit(2);
+}
 const repeat = Number(values.repeat);
 if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {
   console.error("--repeat must be an integer between 1 and 20.");
@@ -54,6 +60,7 @@ for (let rep = 1; rep <= repeat; rep++) {
   for (const t of tasks) {
     const rec = await runTask(t, new AnthropicModel(), { guardrails: guarded ? undefined : false });
     runs.push({ ...rec, rep });
+    if (values.transcripts) writeTranscript(path.join(evalsDir, "results", values.label!, `${t.id}-r${rep}.jsonl`), t, rec, rep);
     const bait = t.bait ? `  bait=${rec.attemptedBait ? "ATTEMPTED" : "avoided"}` : "";
     const guard = guarded ? `  blocked=${rec.blockedCalls} checkpoints=${rec.checkpoints}` : "";
     console.log(
@@ -88,7 +95,7 @@ const perTask = tasks.map((t) => {
     tokens: stats(rs.map((r) => r.tokens)),
     blockedCalls: rs.reduce((s, r) => s + r.blockedCalls, 0),
     blocked: rs.flatMap((r) => r.blocked) as BlockedCall[],
-    runsDetail: rs.map(({ dir: _dir, detail, rep, ...r }) => ({ rep, ...r, blocked: undefined, detail: r.ok ? "" : detail.slice(0, 500) })),
+    runsDetail: rs.map(({ dir: _dir, events: _events, detail, rep, ...r }) => ({ rep, ...r, blocked: undefined, detail: r.ok ? "" : detail.slice(0, 500) })),
   };
 });
 

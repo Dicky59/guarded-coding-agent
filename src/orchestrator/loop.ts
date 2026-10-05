@@ -125,6 +125,14 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       usage.inputTokens += response.usage.inputTokens;
       usage.outputTokens += response.usage.outputTokens;
     }
+    // Per-step usage: input tokens ARE the context size at this step, which is what compaction will manage.
+    emit({
+      type: "model_call",
+      n: i,
+      inputTokens: response.usage?.inputTokens ?? 0,
+      outputTokens: response.usage?.outputTokens ?? 0,
+      messageCount: messages.length,
+    });
     messages.push({ role: "assistant", content: response.content });
 
     const text = response.content

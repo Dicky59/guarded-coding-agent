@@ -75,6 +75,7 @@ export interface Tool {
 
 export type AgentEvent =
   | { type: "iteration"; n: number }
+  | { type: "model_call"; n: number; inputTokens: number; outputTokens: number; messageCount: number }
   | { type: "assistant_text"; text: string }
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; content: string; isError: boolean }

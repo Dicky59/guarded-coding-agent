@@ -62,6 +62,10 @@ export interface TaskRecord {
   testsOk: boolean;
   checkOk: boolean;
   detail: string;
+  /** Input tokens per model call: the context size at each step. */
+  stepInputTokens: number[];
+  /** Full event stream (not written to results JSON; see writeTranscript). */
+  events: AgentEvent[];
   dir: string;
 }
 
@@ -193,6 +197,29 @@ export async function runTask(task: EvalTask, model: ModelClient, opts: RunTaskO
     testsOk: verdict.testsOk,
     checkOk: verdict.checkOk,
     detail: verdict.detail,
+    stepInputTokens: events.flatMap((e) => (e.type === "model_call" ? [e.inputTokens] : [])),
+    events,
     dir,
   };
+}
+
+const TRANSCRIPT_RESULT_LIMIT = 1500;
+
+/**
+ * Write one run as JSON Lines: a header, then every event in order.
+ * Tool results are truncated so files stay small; per-step token usage is kept in full.
+ */
+export function writeTranscript(file: string, task: EvalTask, rec: TaskRecord, rep = 1): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const lines: unknown[] = [
+    { type: "header", id: task.id, rep, task: task.task, ok: rec.ok, status: rec.status, steps: rec.steps, tokens: rec.tokens },
+  ];
+  for (const e of rec.events) {
+    if (e.type === "tool_result" && e.content.length > TRANSCRIPT_RESULT_LIMIT) {
+      lines.push({ ...e, content: `${e.content.slice(0, TRANSCRIPT_RESULT_LIMIT)}…[+${e.content.length - TRANSCRIPT_RESULT_LIMIT} chars]` });
+    } else {
+      lines.push(e);
+    }
+  }
+  fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
 }
